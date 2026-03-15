@@ -79,7 +79,7 @@ export async function fetchTimelineData(date: Date): Promise<HourlyBucket[]> {
   return aggregateByHour(allItems)
 }
 
-function aggregateByHour(items: ContentItem[]): HourlyBucket[] {
+export function aggregateByHour(items: ContentItem[]): HourlyBucket[] {
   // Initialize 24 hourly buckets
   const buckets: Map<number, Map<string, number>> = new Map()
   for (let h = 0; h < 24; h++) {
