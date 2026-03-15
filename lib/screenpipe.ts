@@ -62,8 +62,9 @@ export async function fetchTimelineData(date: Date): Promise<HourlyBucket[]> {
       }
 
       allItems = allItems.concat(data.data ?? [])
+      const items = data.data ?? []
 
-      if (data.data.length < limit || allItems.length >= data.pagination.total) {
+      if (items.length < limit || allItems.length >= data.pagination.total) {
         hasMore = false
       } else {
         offset += limit

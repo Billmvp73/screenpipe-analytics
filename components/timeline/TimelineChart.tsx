@@ -55,19 +55,21 @@ export function TimelineChart({ buckets }: TimelineChartProps) {
                         const widthPct = totalMs > 0 ? (app.durationMs / totalMs) * 100 : 0
                         return (
                           <Tooltip key={app.appName}>
-                            <TooltipTrigger render={<span />}>
-                              <div
-                                className="flex h-full cursor-default items-center overflow-hidden px-1 text-xs text-white/90 transition-opacity hover:opacity-90"
-                                style={{
-                                  width: `${widthPct}%`,
-                                  backgroundColor: app.color,
-                                  minWidth: widthPct > 3 ? undefined : '4px',
-                                }}
-                              >
-                                {widthPct > 8 && (
-                                  <span className="truncate text-[11px]">{app.appName}</span>
-                                )}
-                              </div>
+                            <TooltipTrigger
+                              render={
+                                <div
+                                  className="flex h-full cursor-default items-center overflow-hidden px-1 text-xs text-white/90 transition-opacity hover:opacity-90"
+                                  style={{
+                                    width: `${widthPct}%`,
+                                    backgroundColor: app.color,
+                                    minWidth: widthPct > 3 ? undefined : '4px',
+                                  }}
+                                />
+                              }
+                            >
+                              {widthPct > 8 && (
+                                <span className="truncate text-[11px]">{app.appName}</span>
+                              )}
                             </TooltipTrigger>
                             <TooltipContent side="top" className="text-xs">
                               <div className="font-medium">{app.appName}</div>
