@@ -2,27 +2,29 @@
 
 import { useMemo } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
-import { formatDuration } from '@/lib/screenpipe'
+import { formatDuration, generateAppColorMap } from '@/lib/screenpipe'
 import type { HourlyBucket } from '@/types/screenpipe'
 
 interface PeriodPieChartProps {
   buckets: HourlyBucket[]
 }
 
-const PERIODS = [
-  { label: '上午', range: [6, 12], color: '#f59e0b' },
-  { label: '下午', range: [12, 18], color: '#6366f1' },
-  { label: '晚上', range: [18, 24], color: '#8b5cf6' },
-]
-
 export function PeriodPieChart({ buckets }: PeriodPieChartProps) {
   const data = useMemo(() => {
-    return PERIODS.map(({ label, range, color }) => {
-      const ms = buckets
-        .filter((b) => b.hour >= range[0] && b.hour < range[1])
-        .reduce((sum, b) => sum + b.totalMs, 0)
-      return { name: label, value: ms, color }
-    }).filter((d) => d.value > 0)
+    // Aggregate total time per app across all buckets
+    const appTotals: Record<string, number> = {}
+    for (const bucket of buckets) {
+      for (const [app, ms] of Object.entries(bucket.apps)) {
+        appTotals[app] = (appTotals[app] ?? 0) + ms
+      }
+    }
+
+    const sorted = Object.entries(appTotals)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6) // top 6 apps
+
+    const colorMap = generateAppColorMap(sorted.map(([name]) => name))
+    return sorted.map(([name, value]) => ({ name, value, color: colorMap[name] }))
   }, [buckets])
 
   const total = data.reduce((sum, d) => sum + d.value, 0)
@@ -30,7 +32,7 @@ export function PeriodPieChart({ buckets }: PeriodPieChartProps) {
   if (total === 0) {
     return (
       <div className="flex h-full flex-col rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-        <h3 className="mb-3 text-sm font-semibold text-zinc-300">时段分布</h3>
+        <h3 className="mb-3 text-sm font-semibold text-zinc-300">应用分布</h3>
         <div className="flex flex-1 items-center justify-center">
           <p className="text-xs text-zinc-600">暂无数据</p>
         </div>
@@ -40,8 +42,8 @@ export function PeriodPieChart({ buckets }: PeriodPieChartProps) {
 
   return (
     <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-      <h3 className="mb-3 text-sm font-semibold text-zinc-300">时段分布</h3>
-      <ResponsiveContainer width="100%" height={180}>
+      <h3 className="mb-3 text-sm font-semibold text-zinc-300">应用分布</h3>
+      <ResponsiveContainer width="100%" height={200}>
         <PieChart>
           <Pie
             data={data}
@@ -57,7 +59,7 @@ export function PeriodPieChart({ buckets }: PeriodPieChartProps) {
             ))}
           </Pie>
           <Tooltip
-            formatter={(value) => [formatDuration(Number(value ?? 0)), '']}
+            formatter={(value, name) => [formatDuration(Number(value ?? 0)), name]}
             contentStyle={{
               backgroundColor: '#18181b',
               border: '1px solid #3f3f46',
