@@ -31,7 +31,17 @@ async function proxyRequest(request: NextRequest, params: { path: string[] }) {
     const response = await fetch(url, init)
     clearTimeout(timeoutId)
 
-    const data = await response.json()
+    const text = await response.text()
+    let data: unknown
+    try {
+      data = JSON.parse(text)
+    } catch {
+      console.error('[screenpipe proxy] non-JSON response:', text.slice(0, 200))
+      return Response.json(
+        { error: 'Screenpipe returned non-JSON', detail: text.slice(0, 200), screenpipe_offline: true },
+        { status: 503 }
+      )
+    }
     return Response.json(data, { status: response.status })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
