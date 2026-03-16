@@ -5,6 +5,7 @@ import type {
   OCRContent,
   HourlyBucket,
   AppUsage,
+  AppUsageSummary,
 } from '@/types/screenpipe'
 
 // A fixed palette for app color assignment
@@ -77,13 +78,16 @@ export async function fetchTimelineData(date: Date): Promise<HourlyBucket[]> {
       }
 
       // Normalize frames: replace null app_name with "Other"
-      const validItems = (data.data ?? []).filter(item => item.type === 'OCR').map(item => ({
-        ...item,
-        content: {
-          ...item.content,
-          app_name: item.content.app_name || inferAppName(item.content.text),
+      const validItems = (data.data ?? []).filter(item => item.type === 'OCR').map(item => {
+        const ocr = item.content as OCRContent
+        return {
+          ...item,
+          content: {
+            ...ocr,
+            app_name: ocr.app_name || inferAppName(ocr.text),
+          }
         }
-      }))
+      })
       allItems = allItems.concat(validItems)
       const items = data.data ?? []
 
@@ -171,4 +175,84 @@ export function formatDuration(ms: number): string {
   if (hours > 0) return `${hours}h ${minutes}m`
   if (minutes > 0) return `${minutes}m`
   return '<1m'
+}
+
+export async function fetchInsightsData(startDate: Date, endDate: Date): Promise<AppUsageSummary[]> {
+  // Use local timezone offset (same format as fetchTimelineData)
+  const offsetMinutes = -new Date().getTimezoneOffset()
+  const sign = offsetMinutes >= 0 ? '+' : '-'
+  const absMinutes = Math.abs(offsetMinutes)
+  const tzOffset = `${sign}${String(Math.floor(absMinutes / 60)).padStart(2, '0')}:${String(absMinutes % 60).padStart(2, '0')}`
+
+  const startTime = format(startDate, "yyyy-MM-dd'T'HH:mm:ss") + tzOffset
+  const endTime = format(endDate, "yyyy-MM-dd'T'HH:mm:ss") + tzOffset
+
+  let allItems: ContentItem[] = []
+  const limit = 500
+  let offset = 0
+  let hasMore = true
+
+  while (hasMore) {
+    const params = new URLSearchParams({
+      content_type: 'ocr',
+      limit: String(limit),
+      offset: String(offset),
+      start_time: startTime,
+      end_time: endTime,
+    })
+
+    try {
+      const response = await fetch(`/api/screenpipe/search?${params}`)
+      if (!response.ok) break
+      const data: ScreenpipeSearchResponse = await response.json()
+
+      if ('screenpipe_offline' in data) break
+
+      const validItems = (data.data ?? []).filter(item => item.type === 'OCR').map(item => {
+        const ocr = item.content as OCRContent
+        return {
+          ...item,
+          content: {
+            ...ocr,
+            app_name: ocr.app_name || inferAppName(ocr.text),
+          }
+        }
+      })
+      allItems = allItems.concat(validItems)
+      const items = data.data ?? []
+
+      if (items.length < limit || allItems.length >= data.pagination.total) {
+        hasMore = false
+      } else {
+        offset += limit
+        // Cap at 5000 items for performance
+        if (allItems.length >= 5000) hasMore = false
+      }
+    } catch {
+      break
+    }
+  }
+
+  // Aggregate by app_name, 5000ms per frame
+  const MS_PER_FRAME = 5_000
+  const appTotals = new Map<string, number>()
+
+  for (const item of allItems) {
+    const content = item.content as OCRContent
+    const appName = content.app_name || 'Other'
+    appTotals.set(appName, (appTotals.get(appName) ?? 0) + MS_PER_FRAME)
+  }
+
+  // Sort by totalMs descending
+  const sorted = Array.from(appTotals.entries()).sort((a, b) => b[1] - a[1])
+
+  // Assign colors from COLOR_PALETTE
+  const grandTotalMs = sorted.reduce((sum, [, ms]) => sum + ms, 0)
+
+  return sorted.map(([appName, totalMs], i) => ({
+    appName,
+    totalMs,
+    color: COLOR_PALETTE[i % COLOR_PALETTE.length],
+    percentage: grandTotalMs > 0 ? (totalMs / grandTotalMs) * 100 : 0,
+  }))
 }
