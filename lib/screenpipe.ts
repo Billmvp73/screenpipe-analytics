@@ -36,7 +36,7 @@ function inferAppName(text: string | null): string {
   return 'Other'
 }
 
-(date: Date): Promise<HourlyBucket[]> {
+export async function fetchTimelineData(date: Date): Promise<HourlyBucket[]> {
   const dateStr = format(date, 'yyyy-MM-dd')
 
   // Screenpipe requires ISO 8601 with timezone (e.g. 2024-01-15T10:00:00-07:00)
