@@ -69,10 +69,14 @@ export async function fetchTimelineData(date: Date): Promise<HourlyBucket[]> {
         break
       }
 
-      // Filter out frames with no app_name (unidentified windows/desktop)
-      const validItems = (data.data ?? []).filter(
-        item => item.type === 'OCR' && item.content.app_name
-      )
+      // Normalize frames: replace null app_name with "Other"
+      const validItems = (data.data ?? []).filter(item => item.type === 'OCR').map(item => ({
+        ...item,
+        content: {
+          ...item.content,
+          app_name: item.content.app_name || 'Other',
+        }
+      }))
       allItems = allItems.concat(validItems)
       const items = data.data ?? []
 
