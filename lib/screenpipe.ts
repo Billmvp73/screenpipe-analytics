@@ -69,7 +69,11 @@ export async function fetchTimelineData(date: Date): Promise<HourlyBucket[]> {
         break
       }
 
-      allItems = allItems.concat(data.data ?? [])
+      // Filter out frames with no app_name (unidentified windows/desktop)
+      const validItems = (data.data ?? []).filter(
+        item => item.type === 'OCR' && item.content.app_name
+      )
+      allItems = allItems.concat(validItems)
       const items = data.data ?? []
 
       if (items.length < limit || allItems.length >= data.pagination.total) {
