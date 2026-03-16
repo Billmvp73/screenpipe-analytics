@@ -31,8 +31,9 @@ export function generateAppColorMap(appNames: string[]): Record<string, string> 
 
 export async function fetchTimelineData(date: Date): Promise<HourlyBucket[]> {
   const dateStr = format(date, 'yyyy-MM-dd')
-  const startTime = `${dateStr}T00:00:00Z`
-  const endTime = `${dateStr}T23:59:59Z`
+  // Use local time range — Screenpipe stores with local timezone
+  const startTime = `${dateStr}T00:00:00`
+  const endTime = `${dateStr}T23:59:59`
 
   let allItems: ContentItem[] = []
   const limit = 500
