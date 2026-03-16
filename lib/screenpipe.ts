@@ -30,10 +30,12 @@ export function generateAppColorMap(appNames: string[]): Record<string, string> 
   return map
 }
 
-// Infer app name from OCR text when app_name is null (e.g. Electron apps)
-function inferAppName(text: string | null): string {
-  if (!text) return 'Other'
-  if (text.includes('Mr.Reese') || text.includes('Mr. Reese')) return 'Discord'
+// Infer app name from OCR text/window_name when app_name is null (e.g. Electron apps)
+function inferAppName(text: string | null, windowName: string | null): string {
+  const win = windowName ?? ''
+  const txt = text ?? ''
+  if (win.toLowerCase().includes('discord') || txt.includes('Mr.Reese') || txt.includes('Mr. Reese')) return 'Discord'
+  if (txt.toLowerCase().includes('bilibili')) return 'Bilibili'
   return 'Other'
 }
 
@@ -84,7 +86,7 @@ export async function fetchTimelineData(date: Date): Promise<HourlyBucket[]> {
           ...item,
           content: {
             ...ocr,
-            app_name: ocr.app_name || inferAppName(ocr.text),
+            app_name: ocr.app_name || inferAppName(ocr.text, ocr.window_name),
           }
         }
       })
@@ -214,7 +216,7 @@ export async function fetchInsightsData(startDate: Date, endDate: Date): Promise
           ...item,
           content: {
             ...ocr,
-            app_name: ocr.app_name || inferAppName(ocr.text),
+            app_name: ocr.app_name || inferAppName(ocr.text, ocr.window_name),
           }
         }
       })
