@@ -64,3 +64,12 @@ export interface HealthResponse {
   screenpipe_online: boolean
   timestamp: string
 }
+
+export type InsightsPeriod = "day" | "week" | "month"
+
+export interface AppUsageSummary {
+  appName: string
+  totalMs: number
+  color: string
+  percentage: number
+}

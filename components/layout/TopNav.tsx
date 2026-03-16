@@ -1,9 +1,12 @@
 'use client'
 
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useScreenpipeHealth } from '@/hooks/useScreenpipeHealth'
 
 export function TopNav() {
   const { data: health, isLoading } = useScreenpipeHealth()
+  const pathname = usePathname()
 
   const isOnline = health?.screenpipe_online ?? false
 
@@ -12,6 +15,14 @@ export function TopNav() {
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4">
         <div className="flex items-center gap-2">
           <span className="text-lg font-semibold text-white">🕐 Screenpipe Analytics</span>
+          <nav className="flex items-center gap-4 text-sm ml-6">
+            <Link href="/" className={`transition-colors ${pathname === "/" ? "text-amber-400" : "text-zinc-400 hover:text-zinc-100"}`}>
+              时间轴
+            </Link>
+            <Link href="/insights" className={`transition-colors ${pathname === "/insights" ? "text-amber-400" : "text-zinc-400 hover:text-zinc-100"}`}>
+              统计分析
+            </Link>
+          </nav>
         </div>
         <div className="flex items-center gap-2 text-sm">
           {isLoading ? (
