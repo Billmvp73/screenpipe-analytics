@@ -14,14 +14,14 @@ export function PeriodPieChart({ buckets }: PeriodPieChartProps) {
     // Aggregate total time per app across all buckets
     const appTotals: Record<string, number> = {}
     for (const bucket of buckets) {
-      for (const [app, ms] of Object.entries(bucket.apps)) {
-        appTotals[app] = (appTotals[app] ?? 0) + ms
+      for (const app of bucket.apps) {
+        appTotals[app.appName] = (appTotals[app.appName] ?? 0) + app.durationMs
       }
     }
 
     const sorted = Object.entries(appTotals)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 6) // top 6 apps
+      .slice(0, 6)
 
     const colorMap = generateAppColorMap(sorted.map(([name]) => name))
     return sorted.map(([name, value]) => ({ name, value, color: colorMap[name] }))
