@@ -238,7 +238,6 @@ export async function fetchInsightsData(startDate: Date, endDate: Date): Promise
   const appTotals = new Map<string, number>()
 
   for (const item of allItems) {
-    if (item.type !== 'OCR') continue
     const content = item.content as OCRContent
     const appName = content.app_name || 'Other'
     appTotals.set(appName, (appTotals.get(appName) ?? 0) + MS_PER_FRAME)

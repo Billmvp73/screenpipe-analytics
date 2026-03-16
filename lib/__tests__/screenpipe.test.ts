@@ -1,4 +1,4 @@
-import { aggregateByHour, formatDuration } from '@/lib/screenpipe'
+import { aggregateByHour, formatDuration, fetchInsightsData } from '@/lib/screenpipe'
 import type { ContentItem } from '@/types/screenpipe'
 
 // Helper to build an OCR ContentItem
@@ -196,5 +196,163 @@ describe('formatDuration', () => {
   it('negative or NaN: does not throw', () => {
     expect(() => formatDuration(-1000)).not.toThrow()
     expect(() => formatDuration(NaN)).not.toThrow()
+  })
+})
+
+// ─── fetchInsightsData tests ──────────────────────────────────────────────────
+
+// Helper to build an OCR ContentItem for fetchInsightsData tests
+function makeOCRItem(appName: string, timestamp = '2026-03-15T10:00:00'): ContentItem {
+  return {
+    type: 'OCR',
+    content: {
+      text: 'sample',
+      timestamp,
+      app_name: appName,
+      window_name: '',
+      focused: false,
+    },
+  } as unknown as ContentItem
+}
+
+// Helper: build a mock fetch Response
+function mockFetchResponse(items: ContentItem[], total: number) {
+  return Promise.resolve({
+    ok: true,
+    json: async () => ({
+      data: items,
+      pagination: { total, limit: items.length, offset: 0 },
+    }),
+  })
+}
+
+describe('fetchInsightsData', () => {
+  const START = new Date('2026-03-15T00:00:00')
+  const END = new Date('2026-03-15T23:59:59')
+
+  beforeEach(() => {
+    jest.resetAllMocks()
+  })
+
+  afterEach(() => {
+    // Restore fetch in case test overrode it
+    if ('mockRestore' in (global.fetch as unknown as { mockRestore?: () => void })) {
+      (global.fetch as unknown as { mockRestore: () => void }).mockRestore()
+    }
+  })
+
+  it('empty data: returns empty array', async () => {
+    global.fetch = jest.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: [], pagination: { total: 0 } }),
+    })
+    const result = await fetchInsightsData(START, END)
+    expect(result).toEqual([])
+  })
+
+  it('normal aggregation: sums 5000ms per frame, sorted descending', async () => {
+    const items: ContentItem[] = [
+      makeOCRItem('Chrome', '2026-03-15T10:00:00'),
+      makeOCRItem('Chrome', '2026-03-15T10:01:00'),
+      makeOCRItem('Slack',  '2026-03-15T10:02:00'),
+    ]
+    global.fetch = jest.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: items, pagination: { total: 3 } }),
+    })
+    const result = await fetchInsightsData(START, END)
+    expect(result).toHaveLength(2)
+    expect(result[0].appName).toBe('Chrome')
+    expect(result[0].totalMs).toBe(10_000) // 2 × 5000 ms
+    expect(result[1].appName).toBe('Slack')
+    expect(result[1].totalMs).toBe(5_000)  // 1 × 5000 ms
+  })
+
+  it('percentage calculation: sum ≈ 100%, values proportional', async () => {
+    const items: ContentItem[] = [
+      makeOCRItem('Chrome', '2026-03-15T10:00:00'),
+      makeOCRItem('Chrome', '2026-03-15T10:01:00'), // 2 frames → 66.67%
+      makeOCRItem('Slack',  '2026-03-15T10:02:00'), // 1 frame  → 33.33%
+    ]
+    global.fetch = jest.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: items, pagination: { total: 3 } }),
+    })
+    const result = await fetchInsightsData(START, END)
+    const totalPct = result.reduce((sum, r) => sum + r.percentage, 0)
+    expect(totalPct).toBeCloseTo(100, 5)
+    expect(result[0].percentage).toBeCloseTo(66.67, 1)
+    expect(result[1].percentage).toBeCloseTo(33.33, 1)
+  })
+
+  it('multi-page pagination: fetches page 2 and stops when items < limit', async () => {
+    // Page 1 returns 500 items; pagination.total is bigger → continue
+    // Page 2 returns < 500 items → stop
+    const MS_PER_FRAME = 5_000
+    const page1Items = Array.from({ length: 500 }, (_, i) =>
+      makeOCRItem('AppA', `2026-03-15T${String(Math.floor(i / 60) % 24).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}:00`)
+    )
+    const page2Items = Array.from({ length: 200 }, (_, i) =>
+      makeOCRItem('AppB', `2026-03-15T${String(Math.floor(i / 60) % 24).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}:30`)
+    )
+
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: page1Items, pagination: { total: 9999 } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: page2Items, pagination: { total: 9999 } }),
+      })
+
+    const result = await fetchInsightsData(START, END)
+
+    // fetch should have been called exactly twice (page 1 full, page 2 partial → stop)
+    expect(global.fetch).toHaveBeenCalledTimes(2)
+
+    // AppA: 500 frames, AppB: 200 frames
+    const appA = result.find(r => r.appName === 'AppA')
+    const appB = result.find(r => r.appName === 'AppB')
+    expect(appA?.totalMs).toBe(500 * MS_PER_FRAME)
+    expect(appB?.totalMs).toBe(200 * MS_PER_FRAME)
+    // AppA should rank first (more time)
+    expect(result[0].appName).toBe('AppA')
+  })
+
+  it('multi-page pagination: stops when allItems reaches pagination.total', async () => {
+    // Both pages return full 500 items, but total=600 → after page 2 (1000 >= 600) stop
+    const page1Items = Array.from({ length: 500 }, () => makeOCRItem('AppX'))
+    const page2Items = Array.from({ length: 500 }, () => makeOCRItem('AppX'))
+
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: page1Items, pagination: { total: 600 } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: page2Items, pagination: { total: 600 } }),
+      })
+
+    await fetchInsightsData(START, END)
+
+    // After page 2: allItems = 1000 >= total 600 → hasMore=false; fetch called twice only
+    expect(global.fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('offline / fetch error: returns empty array without throwing', async () => {
+    global.fetch = jest.fn().mockRejectedValueOnce(new Error('network error'))
+    const result = await fetchInsightsData(START, END)
+    expect(result).toEqual([])
+  })
+
+  it('screenpipe_offline flag: returns empty array', async () => {
+    global.fetch = jest.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ screenpipe_offline: true, data: [], pagination: { total: 0 } }),
+    })
+    const result = await fetchInsightsData(START, END)
+    expect(result).toEqual([])
   })
 })

@@ -58,8 +58,8 @@ export function InsightsChart({ data }: InsightsChartProps) {
           />
           <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
           <Bar dataKey="totalMs" radius={[0, 4, 4, 0]}>
-            {data.map((entry, index) => (
-              <Cell key={index} fill={entry.color} />
+            {data.map((entry) => (
+              <Cell key={entry.appName} fill={entry.color} />
             ))}
           </Bar>
         </BarChart>
