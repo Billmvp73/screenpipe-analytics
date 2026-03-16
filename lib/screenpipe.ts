@@ -29,7 +29,14 @@ export function generateAppColorMap(appNames: string[]): Record<string, string> 
   return map
 }
 
-export async function fetchTimelineData(date: Date): Promise<HourlyBucket[]> {
+// Infer app name from OCR text when app_name is null (e.g. Electron apps)
+function inferAppName(text: string | null): string {
+  if (!text) return 'Other'
+  if (text.includes('Mr.Reese') || text.includes('Mr. Reese')) return 'Discord'
+  return 'Other'
+}
+
+(date: Date): Promise<HourlyBucket[]> {
   const dateStr = format(date, 'yyyy-MM-dd')
 
   // Screenpipe requires ISO 8601 with timezone (e.g. 2024-01-15T10:00:00-07:00)
@@ -74,7 +81,7 @@ export async function fetchTimelineData(date: Date): Promise<HourlyBucket[]> {
         ...item,
         content: {
           ...item.content,
-          app_name: item.content.app_name || 'Other',
+          app_name: item.content.app_name || inferAppName(item.content.text),
         }
       }))
       allItems = allItems.concat(validItems)
